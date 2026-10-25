@@ -38,7 +38,7 @@ jobs:
 
       - name: Run Cloud Compilation
         run: |
-          flet build apk
+          flet build apk --no-doctor
 
       - name: Upload Finished APK to Pavel Doogee
         uses: actions/upload-artifact@v4
