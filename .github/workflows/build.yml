@@ -32,7 +32,7 @@ jobs:
 
       - name: Auto Accept Android Licenses
         run: |
-          flutter doctor --android-licenses <<< "y"
+          flutter doctor --android-licenses --accept-licenses
 
       - name: Run Cloud Compilation
         run: |
