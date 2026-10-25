@@ -1,1 +1,42 @@
 
+name: Build Autonomous Droid APK
+on: [push, workflow_dispatch]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout project code
+        uses: actions/checkout@v4
+
+      - name: Set up Python Engine
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Pure Flet Compiler
+        run: |
+          pip install --upgrade pip
+          pip install flet==0.25.0
+
+      - name: Set up Java Environment for Android
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Official Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+
+      - name: Run Cloud Compilation
+        run: |
+          flet build apk --target-platform android-arm64
+
+      - name: Upload Finished APK to Pavel Doogee
+        uses: actions/upload-artifact@v4
+        with:
+          name: autonomous-droid-app
+          path: build/flutter/build/app/outputs/flutter-apk/app-release.apk
