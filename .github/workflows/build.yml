@@ -30,9 +30,11 @@ jobs:
           flutter-version: '3.24.0'
           channel: 'stable'
 
-      - name: Auto Accept Android Licenses
+      - name: Force Inject Android Licenses
         run: |
-          flutter doctor --android-licenses --accept-licenses
+          mkdir -p ${ANDROID_HOME}/licenses
+          echo -e "\n24a0d9de33f2e807de9a1b9e7458edd0a9e7f0d6\n84831b9409646a54c50460a1800cc4cc46422833\nd975f225aa874a6dbe28ddfb3a059564acf3846e\n85caf2044c941103cc0f968b56012a6f7d74d76b\n7a7e85d69fa40a5bc4eeaa0a0fb295d9747cc9d9\ncd4d058a1c2b58473e16c75715270f216a7b3765\n2f20a60b9c643e23dd26786446ec41d5dd6a241d" > ${ANDROID_HOME}/licenses/android-sdk-license
+          echo -e "\n84831b9409646a54c50460a1800cc4cc46422833" > ${ANDROID_HOME}/licenses/android-sdk-preview-license
 
       - name: Run Cloud Compilation
         run: |
