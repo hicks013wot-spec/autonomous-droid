@@ -1,48 +1,46 @@
-name: Build Autonomous Droid APK
-on: [push, workflow_dispatch]
+name: Build Droid APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout project code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python Engine
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install Pure Flet Compiler
-        run: |
-          pip install --upgrade pip
-          pip install flet==0.25.0
-
-      - name: Set up Java Environment for Android
+      - name: Set up Java SDK
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: 'zulu'
           java-version: '17'
 
-      - name: Set up Official Flutter SDK
+      - name: Set up Flutter SDK
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.0'
+          flutter-version: '3.19.6'
           channel: 'stable'
 
-      - name: Force Inject Android Licenses
+      - name: Install Python dependencies
         run: |
-          mkdir -p ${ANDROID_HOME}/licenses
-          echo -e "\n24a0d9de33f2e807de9a1b9e7458edd0a9e7f0d6\n84831b9409646a54c50460a1800cc4cc46422833\nd975f225aa874a6dbe28ddfb3a059564acf3846e\n85caf2044c941103cc0f968b56012a6f7d74d76b\n7a7e85d69fa40a5bc4eeaa0a0fb295d9747cc9d9\ncd4d058a1c2b58473e16c75715270f216a7b3765\n2f20a60b9c643e23dd26786446ec41d5dd6a241d" > ${ANDROID_HOME}/licenses/android-sdk-license
-          echo -e "\n84831b9409646a54c50460a1800cc4cc46422833" > ${ANDROID_HOME}/licenses/android-sdk-preview-license
+          python -m pip install --upgrade pip
+          pip install flet==0.21.2 SpeechRecognition gigachat pyttsx3
 
-      - name: Run Cloud Compilation
+      - name: Build APK via Flet
         run: |
-          flutter config --no-analytics
-          cd build/flutter && flutter build apk --build-name=1.0.0 --build-number=1 --target-platform android-arm64
+          flet build apk
 
-      - name: Upload Finished APK to Pavel Doogee
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: autonomous-droid-app
-          path: build/flutter/build/app/outputs/flutter-apk/app-release.apk
+          name: Droid-App-APK
+          path: build/apk/*.apk
