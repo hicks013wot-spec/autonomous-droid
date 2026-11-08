@@ -53,7 +53,7 @@ jobs:
 
       - name: Build APK via Flet
         run: |
-          cd my_app && flet build apk . --no-analytics
+          cd my_app && flet build apk .
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
