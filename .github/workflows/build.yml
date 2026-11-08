@@ -35,6 +35,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y zip
 
+      - name: Prepare project structure
+        run: |
+          mkdir -p my_app
+          cp main.py my_app/
+          cp requirements.txt my_app/
+
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
@@ -42,10 +48,10 @@ jobs:
 
       - name: Build APK via Flet
         run: |
-          flet build apk .
+          cd my_app && flet build apk .
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: Droid-App-APK
-          path: build/apk/*.apk
+          path: my_app/build/apk/*.apk
