@@ -46,9 +46,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install flet==0.21.2 SpeechRecognition gigachat pyttsx3
 
-      - name: Build APK via Flet
+      - name: Build APK via Flet (Admin Mode)
         run: |
-          cd my_app && flet build apk .
+          cd my_app && sudo flet build apk .
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
