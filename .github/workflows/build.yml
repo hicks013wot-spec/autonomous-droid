@@ -35,6 +35,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y zip
 
+      - name: Accept Android Licenses
+        run: |
+          mkdir -p ${ANDROID_HOME}/cmdline-tools/latest/bin
+          yes | sdkmanager --licenses || true
+
       - name: Prepare project structure
         run: |
           mkdir -p my_app
@@ -48,7 +53,7 @@ jobs:
 
       - name: Build APK via Flet
         run: |
-          cd my_app && flet build apk .
+          cd my_app && flet build apk . --no-analytics
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
