@@ -1,0 +1,3 @@
+[tool.flet.android.permission]
+"android.permission.RECORD_AUDIO" = true
+"android.permission.INTERNET" = true
