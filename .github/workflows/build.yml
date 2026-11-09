@@ -35,17 +35,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y zip
 
-      - name: Accept Android Licenses
-        run: |
-          mkdir -p ${ANDROID_HOME}/cmdline-tools/latest/bin
-          yes | sdkmanager --licenses || true
-
-      - name: Prepare project structure
-        run: |
-          mkdir -p my_app
-          cp main.py my_app/
-          cp requirements.txt my_app/
-
       - name: Install Python dependencies globally
         run: |
           python -m pip install --upgrade pip
@@ -53,10 +42,10 @@ jobs:
 
       - name: Build APK via Flet
         run: |
-          cd my_app && flet build apk .
+          flet build apk .
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: Droid-App-APK
-          path: my_app/build/apk/*.apk
+          path: build/apk/*.apk
