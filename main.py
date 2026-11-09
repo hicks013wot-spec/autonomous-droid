@@ -5,13 +5,11 @@ import uuid
 import threading
 import httpx
 import flet as ft
-import speech_recognition as sr
+from gtts import gTTS
 
 BAD_WORDS = ["дурак", "плохой", "ломать", "тупой"]
 GIGACHAT_CREDENTIALS = "MDFhMTVlYjUtMTZmYy03MDdhLWI2MDQtMGY3MDQ2ZWM1OTg4OjcyOTAyMjJhLTJhMTYtNDdhOC04NTgxLTFiZDQwZmNiNzIzOA=="
 
-recognizer = sr.Recognizer()
-microphone = None
 global_running = True
 is_recording_ptt = False
 
@@ -57,13 +55,39 @@ def ask_gigachat(prompt: str) -> str:
             )
             choices = chat_res.json().get("choices", [])
             if choices:
-                return next(iter(choices))["message"]["content"]
+                return choices[0]["message"]["content"]
             return "Не получил ответ от нейросети."
-    except Exception as e:
-        print(f"[Ошибка GigaChat]: {e}")
+    except Exception:
         return "Извините, у меня слегка закружились шестерёнки. Повторите, пожалуйста!"
+
+def recognize_audio_file(file_path: str) -> str:
+    stt_url = "http" + "://://google.com"
+    try:
+        if not os.path.exists(file_path):
+            return ""
+        with open(file_path, "rb") as f:
+            audio_data = f.read()
+        if len(audio_data) < 2000:
+            return ""
+        with httpx.Client(timeout=10.0) as client:
+            res = client.post(
+                stt_url,
+                headers={"Content-Type": "audio/l16; rate=16000; channels=1"},
+                content=audio_data
+            )
+            lines = res.text.strip().split("\n")
+            for line in lines:
+                if "transcript" in line:
+                    import json
+                    data = json.loads(line)
+                    alts = data.get("result", [{}])[0].get("alternative", [])
+                    if alts:
+                        return alts[0].get("transcript", "").lower().strip()
+    except Exception:
+        pass
+    return ""
 def main(page: ft.Page):
-    global microphone, global_running
+    global global_running, is_recording_ptt
     page.title = "Дроид"
     page.theme_mode = ft.ThemeMode.DARK
     page.bgcolor = "#000000"
@@ -73,10 +97,21 @@ def main(page: ft.Page):
     droid_color = "#00FF66"
     global_running = True
 
+    audio_player = ft.Audio(src="https://dummy.local", autoplay=False)
+    page.overlay.append(audio_player)
+
     def say_free(text: str):
-        if not global_running:
+        if not global_running or not text:
             return
-        print(f"[Голос дроида]: {text}")
+        try:
+            tts_file = f"/tmp/voice_{uuid.uuid4().hex}.mp3"
+            tts = gTTS(text=text, lang="ru")
+            tts.save(tts_file)
+            audio_player.src = tts_file
+            audio_player.autoplay = True
+            audio_player.update()
+        except Exception as e:
+            print(f"[Ошибка голоса]: {e}")
 
     def on_close_app(e):
         global global_running
@@ -150,6 +185,9 @@ def main(page: ft.Page):
     def goto_reset():
         if not global_running:
             return
+        left_eye_box.bgcolor = droid_color
+        right_eye_box.bgcolor = droid_color
+        mouth.bgcolor = droid_color
         set_emotion_neutral()
         status_text.value = "Режим: Автономный" if mode_switch.value else "Режим: AI-мозг (Зажмите MIC)"
         page.is_busy = False
@@ -158,24 +196,115 @@ def main(page: ft.Page):
                 page.update()
         except Exception:
             pass
+    record_file_path = "/tmp/droid_rec.wav"
+    audio_recorder = ft.AudioRecorder(
+        audio_encoder=ft.AudioEncoder.WAV,
+        channels_num=1,
+        sample_rate=16000
+    )
+    page.overlay.append(audio_recorder)
+
+    def process_recorded_voice(is_ai_mode: bool):
+        try:
+            user_text = recognize_audio_file(record_file_path)
+            if not user_text:
+                if is_ai_mode:
+                    status_text.value = "Не расслышал, повторите"
+                    page.update()
+                    time.sleep(2.0)
+                    goto_reset()
+                else:
+                    page.is_busy = False
+                return
+
+            if any(bad_word in user_text for bad_word in BAD_WORDS):
+                set_emotion_angry()
+                status_text.value = "🚫 Выражайтесь культурно."
+                page.update()
+                say_free("Ребята и взрослые в нашем садике говорят только вежливые слова.")
+                time.sleep(4.5)
+                goto_reset()
+                return
+
+            if is_ai_mode:
+                status_text.value = "🤔 Думаю..."
+                page.update()
+                ai_answer = ask_gigachat(user_text)
+                set_emotion("happy")
+                status_text.value = ai_answer
+                page.update()
+                say_free(ai_answer)
+                time.sleep(5.0)
+                goto_reset()
+            else:
+                answer = None
+                if any(p in user_text for p in ["привет", "здравствуй"]):
+                    answer = "Здравствуйте! Рады видеть вас."
+                    set_emotion("happy")
+                elif "доброе утро" in user_text:
+                    answer = "Доброе утро! Прекрасного вам дня."
+                    set_emotion("happy")
+                elif "добрый день" in user_text:
+                    answer = "Добрый день! Добро пожаловать."
+                    set_emotion("happy")
+                elif "добрый вечер" in user_text:
+                    answer = "Добрый вечер! Рады вам."
+                    set_emotion("happy")
+                elif any(p in user_text for p in ["до свидания", "всего хорошего", "всего доброго"]):
+                    answer = "До свидания! Хорошего вам вечера."
+                    set_emotion("sad")
+                elif any(p in user_text for p in ["хорошего дня", "хорошего вам дня"]):
+                    answer = "Спасибо! И вам прекрасного дня."
+                    set_emotion("sad")
+                elif "хороших выходных" in user_text:
+                    answer = "Спасибо! Желаю вам отличных выходных."
+                    set_emotion("sad")
+                elif "пока" in user_text or "до встречи" in user_text:
+                    answer = "Пока-пока! Приходите к нам ещё."
+                    set_emotion("sad")
+                elif any(p in user_text for p in ["кто ты", "что ты", "кто это", "что это", "как зовут"]):
+                    answer = "Я дроид, Паша создал меня для помощи по садику."
+                    set_emotion("surprised")
+
+                if answer:
+                    status_text.value = answer
+                    page.update()
+                    say_free(answer)
+                    time.sleep(4.5)
+                    goto_reset()
+                else:
+                    page.is_busy = False
+        except Exception:
+            goto_reset()
+
     def on_mode_change(e):
         status_text.value = "Режим: Автономный" if mode_switch.value else "Режим: AI-мозг (Зажмите MIC)"
         page.update()
 
     def on_mic_hold(e):
         global is_recording_ptt
-        if not global_running or mode_switch.value:
+        if not global_running or mode_switch.value or is_recording_ptt:
             return
         is_recording_ptt = True
+        page.is_busy = True
         status_text.value = "Дроид внимательно слушает..."
         set_emotion("surprised")
         page.update()
+        try:
+            audio_recorder.start_recording(record_file_path)
+        except Exception:
+            goto_reset()
 
     def on_mic_release(e):
         global is_recording_ptt
-        if not global_running or mode_switch.value:
+        if not global_running or mode_switch.value or not is_recording_ptt:
             return
         is_recording_ptt = False
+        try:
+            audio_recorder.stop_recording()
+        except Exception:
+            pass
+        threading.Thread(target=process_recorded_voice, args=(True,), daemon=True).start()
 
     mode_switch = ft.Switch(
         label="Автономный",
@@ -216,11 +345,6 @@ def main(page: ft.Page):
         )
     )
 
-    try:
-        microphone = sr.Microphone()
-    except Exception:
-        microphone = None
-
     def blink_timer_func():
         if not global_running:
             return
@@ -236,7 +360,7 @@ def main(page: ft.Page):
                         page.update()
                         time.sleep(0.01)
                     time.sleep(0.12)
-                    new_radius = random.choice([10, 20, 30])
+                    new_radius = random.choice([10, 20, 35])
                     left_eye_box.border_radius = new_radius
                     right_eye_box.border_radius = new_radius
                     for h in range(10, 111, 25):
@@ -277,134 +401,42 @@ def main(page: ft.Page):
                     page.update()
             except Exception:
                 pass
-        elif page.is_busy and left_eye_box.height == 110:
-            try:
-                left_eye_box.height = 10
-                right_eye_box.height = 10
-                page.update()
-                time.sleep(0.15)
-                left_eye_box.height = 110
-                right_eye_box.height = 110
-                page.update()
-            except Exception:
-                pass
         if global_running:
             threading.Timer(random.uniform(2.5, 4.5), blink_timer_func).start()
 
-    threading.Timer(2.0, blink_timer_func).start()
-    def mic_loop_worker():
-        global recognizer, microphone, global_running, is_recording_ptt
-        if not microphone:
-            return
-        with microphone as source:
-            recognizer.adjust_for_ambient_noise(source, duration=1.0)
-            last_active_time = time.time()
-            while global_running:
-                try:
-                    if not mode_switch.value:
-                        if not is_recording_ptt:
-                            time.sleep(0.1)
-                            continue
-                        audio = recognizer.listen(source, timeout=3, phrase_time_limit=5)
-                        user_text = recognizer.recognize_google(audio, language="ru-RU").strip().lower()
-                        status_text.value = "🤔 Думаю..."
-                        page.update()
-                        ai_answer = ask_gigachat(user_text)
-                        set_emotion("happy")
-                        status_text.value = ai_answer
-                        page.update()
-                        say_free(ai_answer)
-                        time.sleep(4.5)
-                        goto_reset()
-                        continue
-
-                    if time.time() - last_active_time > 30 and not page.is_busy:
-                        try:
-                            left_eye_box.height = 10
-                            right_eye_box.height = 10
-                            status_text.value = "Zzz..."
-                            page.update()
-                        except Exception:
-                            pass
-
-                    audio = recognizer.listen(source, timeout=1, phrase_time_limit=4)
-                    if not global_running or not mode_switch.value:
-                        continue
-                    if len(audio.frame_data) < 1000:
-                        continue
-                    user_text = recognizer.recognize_google(audio, language="ru-RU").strip().lower()
-
-                    try:
-                        left_eye_box.height = 110
-                        right_eye_box.height = 110
-                        last_active_time = time.time()
-                        page.update()
-                    except Exception:
-                        pass
-
-                    if any(bad_word in user_text for bad_word in BAD_WORDS):
-                        page.is_busy = True
-                        try:
-                            set_emotion_angry()
-                            status_text.value = "🚫️ Выражайтесь культурно."
-                            page.update()
-                        except Exception:
-                            pass
-                        say_free("Ребята и взрослые в нашем садике говорят только вежливые слова.")
-                        time.sleep(4.5)
-                        try:
-                            left_eye_box.bgcolor = droid_color
-                            right_eye_box.bgcolor = droid_color
-                            mouth.bgcolor = droid_color
-                            goto_reset()
-                        except Exception:
-                            pass
-                        continue
-
-                    page.is_busy = True
-                    answer = None
-                    if any(p in user_text for p in ["привет", "здравствуй"]):
-                        answer = "Здравствуйте! Рады видеть вас."
-                        set_emotion("happy")
-                    elif "доброе утро" in user_text:
-                        answer = "Доброе утро! Прекрасного вам дня."
-                        set_emotion("happy")
-                    elif "добрый день" in user_text:
-                        answer = "Добрый день! Добро пожаловать."
-                        set_emotion("happy")
-                    elif "добрый вечер" in user_text:
-                        answer = "Добрый вечер! Рады вам."
-                        set_emotion("happy")
-                    elif any(p in user_text for p in ["до свидания", "всего хорошего", "всего доброго"]):
-                        answer = "До свидания! Хорошего вам вечера."
-                        set_emotion("sad")
-                    elif any(p in user_text for p in ["хорошего дня", "хорошего вам дня"]):
-                        answer = "Спасибо! И вам прекрасного дня."
-                        set_emotion("sad")
-                    elif "хороших выходных" in user_text:
-                        answer = "Спасибо! Желаю вам отличных выходных."
-                        set_emotion("sad")
-                    elif "пока" in user_text or "до встречи" in user_text:
-                        answer = "Пока-пока! Приходите к нам ещё."
-                        set_emotion("sad")
-                    elif any(p in user_text for p in ["кто ты", "что ты", "кто это", "что это", "как зовут"]):
-                        answer = "Я дроид, Паша создал меня для помощи по садику."
-                        set_emotion("surprised")
-
-                    if answer:
-                        try:
-                            status_text.value = answer
-                            page.update()
-                        except Exception:
-                            pass
-                        say_free(answer)
-                        time.sleep(4.5)
-                        goto_reset()
-                    else:
-                        page.is_busy = False
-                except Exception:
+    def auto_listen_loop():
+        last_active_time = time.time()
+        while global_running:
+            try:
+                if not mode_switch.value or page.is_busy or is_recording_ptt:
+                    time.sleep(0.5)
                     continue
 
-    threading.Thread(target=mic_loop_worker, daemon=True).start()
+                if time.time() - last_active_time > 30:
+                    left_eye_box.height = 10
+                    right_eye_box.height = 10
+                    status_text.value = "Zzz..."
+                    page.update()
+
+                audio_recorder.start_recording(record_file_path)
+                time.sleep(3.5)
+                audio_recorder.stop_recording()
+
+                if not mode_switch.value or is_recording_ptt:
+                    continue
+
+                user_text = recognize_audio_file(record_file_path)
+                if user_text:
+                    left_eye_box.height = 110
+                    right_eye_box.height = 110
+                    last_active_time = time.time()
+                    page.is_busy = True
+                    page.update()
+                    process_recorded_voice(False)
+            except Exception:
+                time.sleep(1.0)
+
+    threading.Timer(2.0, blink_timer_func).start()
+    threading.Thread(target=auto_listen_loop, daemon=True).start()
 
 ft.app(target=main)
