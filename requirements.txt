@@ -1,4 +1,1 @@
-flet==0.21.2
 SpeechRecognition
-gigachat
-pyttsx3
