@@ -3,88 +3,100 @@ import time
 import os
 import uuid
 import threading
+import json
 import httpx
 import flet as ft
 from gtts import gTTS
 
 BAD_WORDS = ["дурак", "плохой", "ломать", "тупой"]
-GIGACHAT_CREDENTIALS = "MDFhMTVlYjUtMTZmYy03MDdhLWI2MDQtMGY3MDQ2ZWM1OTg4OjcyOTAyMjJhLTJhMTYtNDdhOC04NTgxLTFiZDQwZmNiNzIzOA=="
+
+# База локальных фраз Дроида (Триггеры и случайные ответы)
+DROID_BRAIN = {
+    "morning": {
+        "triggers": ["привет", "здравствуй", "утро", "день", "вечер", "салют"],
+        "responses": [
+            "Привет, юный исследователь! Батарейки зарядил? Сегодня ждёт много интересного!",
+            "О, знакомые лица! Привет! Заходи быстрее, игрушки уже заждались.",
+            "Салют! Сканер показывает, что настроение отличное. Хорошего дня в группе!",
+            "Доброе утро! Пост охраны и робототехники желает вам продуктивного дня.",
+            "Здравствуйте! Приём детей идёт по расписанию, хорошего вам дня."
+        ],
+        "emotion": "happy"
+    },
+    "goodbye": {
+        "triggers": ["пока", "свидания", "домой", "встречи", "выходных", "всего доброго"],
+        "responses": [
+            "До завтра! Не забудь дома подзарядиться вкусным ужином!",
+            "Пока-пока! Завтра жду снова на базе, будем покорять новые вершины.",
+            "До свидания! Отличного вечера, отдохните как следует."
+        ],
+        "emotion": "sad"
+    },
+    "who_are_you": {
+        "triggers": ["кто ты", "как зовут", "имя", "что это"],
+        "responses": [
+            "Я Дроид — специальный кибер-помощник охраны. Слежу за порядком и поднимаю настроение.",
+            "Меня зовут Дроид. Я сделан из кода, проводов и отличного настроения."
+        ],
+        "emotion": "surprised"
+    },
+    "what_can_you_do": {
+        "triggers": ["умеешь", "зачем ты", "делаешь", "функции"],
+        "responses": [
+            "Умею здороваться, следить за порядком и проверять, все ли улыбаются. А ещё я отлично умею экономить заряд батареи!",
+            "Моя главная задача — помогать Паше на посту и встречать самых крутых ребят этого садика."
+        ],
+        "emotion": "happy"
+    },
+    "are_you_alive": {
+        "triggers": ["живой", "настоящий", "робот", "человек"],
+        "responses": [
+            "Наполовину! У меня нет сердца, зато есть процессор и зелёные глаза, которые рады тебя видеть.",
+            "Я самый настоящий цифровой друг. Почти как живой, только кашу по утрам не ем."
+        ],
+        "emotion": "surprised"
+    },
+    "age": {
+        "triggers": ["сколько лет", "возраст", "когда родился"],
+        "responses": [
+            "По человеческим меркам я совсем малыш, родился в 2026 году. Но соображаю очень быстро!"
+        ],
+        "emotion": "happy"
+    },
+    "praise": {
+        "triggers": ["крутой", "хороший", "смешной", "молодец", "классный"],
+        "responses": [
+            "Спасибо! Мои микросхемы прямо засветились от радости.",
+            "Приятно слышать! Записываю тебя в список лучших друзей дроида."
+        ],
+        "emotion": "happy"
+    }
+}
+
+# Мысли вслух (Режим ожидания)
+IDLE_THOUGHTS = [
+    "Так, все на занятиях... Можно пока немного поберечь батарею.",
+    "Проверка систем... Всё в норме, пост под надёжной защитой."
+]
 
 global_running = True
 is_recording_ptt = False
 
-def ask_gigachat(prompt: str) -> str:
-    auth_url = "https" + "://ngw.devices.sberbank.ru:9443/api/v2/oauth"
-    chat_url = "https" + "://gigachat.devices.sberbank.ru/api/v1/chat/completions"
-    try:
-        with httpx.Client(verify=False, timeout=15.0) as client:
-            auth_res = client.post(
-                auth_url,
-                headers={
-                    "Content-Type": "application/x-www-form-urlencoded",
-                    "Accept": "application/json",
-                    "RqUID": str(uuid.uuid4()),
-                    "Authorization": f"Basic {GIGACHAT_CREDENTIALS}"
-                },
-                data={"scope": "GIGACHAT_API_PERS"}
-            )
-            token = auth_res.json().get("access_token")
-            if not token:
-                return "Не удалось связаться со Сбером. Проверьте интернет."
-
-            chat_res = client.post(
-                chat_url,
-                headers={
-                    "Content-Type": "application/json",
-                    "Accept": "application/json",
-                    "Authorization": f"Bearer {token}"
-                },
-                json={
-                    "model": "GigaChat-2-Max",
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": "Ты — добрый, вежливый и весёлый робот-помощник по имени Дроид в детском саду. Отвечай коротко (1-2 предложения), доступно для детей, позитивно и всегда уважительно."
-                        },
-                        {
-                            "role": "user",
-                            "content": prompt
-                        }
-                    ]
-                }
-            )
-            choices = chat_res.json().get("choices", [])
-            if choices:
-                return choices[0]["message"]["content"]
-            return "Не получил ответ от нейросети."
-    except Exception:
-        return "Извините, у меня слегка закружились шестерёнки. Повторите, пожалуйста!"
-
 def recognize_audio_file(file_path: str) -> str:
     stt_url = "http" + "://://google.com"
     try:
-        if not os.path.exists(file_path):
-            return ""
+        if not os.path.exists(file_path): return ""
         with open(file_path, "rb") as f:
             audio_data = f.read()
-        if len(audio_data) < 2000:
-            return ""
+        if len(audio_data) < 2000: return ""
         with httpx.Client(timeout=10.0) as client:
-            res = client.post(
-                stt_url,
-                headers={"Content-Type": "audio/l16; rate=16000; channels=1"},
-                content=audio_data
-            )
-            lines = res.text.strip().split("\n")
-            for line in lines:
+            res = client.post(stt_url, headers={"Content-Type": "audio/l16; rate=16000; channels=1"}, content=audio_data)
+            for line in res.text.strip().split("\n"):
                 if "transcript" in line:
-                    import json
                     data = json.loads(line)
                     alts = data.get("result", [{}])[0].get("alternative", [])
-                    if alts:
-                        return alts[0].get("transcript", "").lower().strip()
-    except Exception:
-        pass
+                    if alts: return alts[0].get("transcript", "").lower().strip()
+    except Exception: pass
     return ""
 def main(page: ft.Page):
     global global_running, is_recording_ptt
@@ -97,14 +109,14 @@ def main(page: ft.Page):
     droid_color = "#00FF66"
     global_running = True
 
-    audio_player = ft.Audio(src="https://dummy.local", autoplay=False)
+    audio_player = ft.Audio(src="about:blank", autoplay=False)
     page.overlay.append(audio_player)
 
     def say_free(text: str):
         if not global_running or not text:
             return
         try:
-            tts_file = f"/tmp/voice_{uuid.uuid4().hex}.mp3"
+            tts_file = f"voice_{uuid.uuid4().hex}.mp3"
             tts = gTTS(text=text, lang="ru")
             tts.save(tts_file)
             audio_player.src = tts_file
@@ -196,7 +208,7 @@ def main(page: ft.Page):
                 page.update()
         except Exception:
             pass
-    record_file_path = "/tmp/droid_rec.wav"
+    record_file_path = "droid_rec.wav"
     audio_recorder = ft.AudioRecorder(
         audio_encoder=ft.AudioEncoder.WAV,
         channels_num=1,
@@ -226,51 +238,29 @@ def main(page: ft.Page):
                 goto_reset()
                 return
 
-            if is_ai_mode:
-                status_text.value = "🤔 Думаю..."
+            # Ищем совпадения по триггерам в нашей базе знаний
+            matched_key = None
+            for key, data in DROID_BRAIN.items():
+                if any(trigger in user_text for trigger in data["triggers"]):
+                    matched_key = key
+                    break
+
+            if matched_key:
+                brain_data = DROID_BRAIN[matched_key]
+                chosen_response = random.choice(brain_data["responses"])
+                set_emotion(brain_data["emotion"])
+                status_text.value = chosen_response
                 page.update()
-                ai_answer = ask_gigachat(user_text)
-                set_emotion("happy")
-                status_text.value = ai_answer
-                page.update()
-                say_free(ai_answer)
+                say_free(chosen_response)
                 time.sleep(5.0)
                 goto_reset()
             else:
-                answer = None
-                if any(p in user_text for p in ["привет", "здравствуй"]):
-                    answer = "Здравствуйте! Рады видеть вас."
-                    set_emotion("happy")
-                elif "доброе утро" in user_text:
-                    answer = "Доброе утро! Прекрасного вам дня."
-                    set_emotion("happy")
-                elif "добрый день" in user_text:
-                    answer = "Добрый день! Добро пожаловать."
-                    set_emotion("happy")
-                elif "добрый вечер" in user_text:
-                    answer = "Добрый вечер! Рады вам."
-                    set_emotion("happy")
-                elif any(p in user_text for p in ["до свидания", "всего хорошего", "всего доброго"]):
-                    answer = "До свидания! Хорошего вам вечера."
+                if is_ai_mode:
+                    status_text.value = "Я локальный Дроид и пока не знаю ответа на это."
                     set_emotion("sad")
-                elif any(p in user_text for p in ["хорошего дня", "хорошего вам дня"]):
-                    answer = "Спасибо! И вам прекрасного дня."
-                    set_emotion("sad")
-                elif "хороших выходных" in user_text:
-                    answer = "Спасибо! Желаю вам отличных выходных."
-                    set_emotion("sad")
-                elif "пока" in user_text or "до встречи" in user_text:
-                    answer = "Пока-пока! Приходите к нам ещё."
-                    set_emotion("sad")
-                elif any(p in user_text for p in ["кто ты", "что ты", "кто это", "что это", "как зовут"]):
-                    answer = "Я дроид, Паша создал меня для помощи по садику."
-                    set_emotion("surprised")
-
-                if answer:
-                    status_text.value = answer
                     page.update()
-                    say_free(answer)
-                    time.sleep(4.5)
+                    say_free("Я локальный дроид и пока не знаю ответа на этот вопрос.")
+                    time.sleep(4.0)
                     goto_reset()
                 else:
                     page.is_busy = False
@@ -353,19 +343,17 @@ def main(page: ft.Page):
                 action = random.choice([0, 1, 2])
                 if action == 0:
                     for h in range(110, 9, -25):
-                        if not global_running:
-                            return
+                        if not global_running: return
                         left_eye_box.height = h
                         right_eye_box.height = h
                         page.update()
                         time.sleep(0.01)
                     time.sleep(0.12)
-                    new_radius = random.choice([10, 20, 35])
+                    new_radius = random.choice([5, 10, 20])
                     left_eye_box.border_radius = new_radius
                     right_eye_box.border_radius = new_radius
                     for h in range(10, 111, 25):
-                        if not global_running:
-                            return
+                        if not global_running: return
                         left_eye_box.height = h
                         right_eye_box.height = h
                         page.update()
@@ -385,8 +373,7 @@ def main(page: ft.Page):
                     page.update()
                 elif action == 2:
                     for w in range(90, 106, 5):
-                        if not global_running:
-                            return
+                        if not global_running: return
                         left_eye_box.width = w
                         right_eye_box.width = w
                         left_eye_box.height = 110 + (w - 90)
