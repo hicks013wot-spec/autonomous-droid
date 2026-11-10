@@ -1,1 +1,3 @@
 gTTS
+flet-audio
+flet-audio-recorder
