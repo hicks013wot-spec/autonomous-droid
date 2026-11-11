@@ -4,7 +4,7 @@ import os
 import uuid
 import threading
 import json
-import httpx
+import urllib.request
 import flet as ft
 from gtts import gTTS
 
@@ -83,14 +83,19 @@ def recognize_audio_file(file_path: str) -> str:
             audio_data = f.read()
         if len(audio_data) < 2000:
             return ""
-        with httpx.Client(timeout=10.0) as client:
-            res = client.post(stt_url, headers={"Content-Type": "audio/l16; rate=16000; channels=1"}, content=audio_data)
-            for line in res.text.strip().split("\n"):
+        req = urllib.request.Request(
+            stt_url,
+            data=audio_data,
+            headers={"Content-Type": "audio/l16; rate=16000; channels=1"}
+        )
+        with urllib.request.urlopen(req, timeout=10.0) as res:
+            raw_text = res.read().decode("utf-8")
+            for line in raw_text.strip().split("\n"):
                 if "transcript" in line:
                     data = json.loads(line)
                     alts = data.get("result", [{}]).get("alternative", [])
                     if alts:
-                        return alts[0].get("transcript", "").lower().strip()
+                        return alts.get("transcript", "").lower().strip()
     except Exception:
         pass
     return ""
@@ -295,7 +300,7 @@ def main(page: ft.Page):
             return
         if not page.is_busy and left_eye_box.height == 110:
             try:
-                action = random.choice([0, 1, 2])
+                action = random.choice()
                 if action == 0:
                     for h in range(110, 9, -25):
                         if not global_running:
@@ -305,7 +310,7 @@ def main(page: ft.Page):
                         page.update()
                         time.sleep(0.01)
                     time.sleep(0.12)
-                    new_radius = random.choice([20, 35, 10])
+                    new_radius = random.choice()
                     left_eye_box.border_radius = new_radius
                     right_eye_box.border_radius = new_radius
                     for h in range(10, 111, 25):
