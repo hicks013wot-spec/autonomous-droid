@@ -5,6 +5,7 @@ import uuid
 import threading
 import json
 import urllib.request
+import flet as ft
 import flet_audio_recorder as ftar
 from gtts import gTTS
 
@@ -93,9 +94,9 @@ def recognize_audio_file(file_path: str) -> str:
             for line in raw_text.strip().split("\n"):
                 if "transcript" in line:
                     data = json.loads(line)
-                    alts = data.get("result", [{}]).get("alternative", [])
+                    alts = data.get("result", (dict(),)).get("alternative", ())
                     if alts:
-                        return alts.get("transcript", "").lower().strip()
+                        return next(iter(alts)).get("transcript", "").lower().strip()
     except Exception:
         pass
     return ""
@@ -213,7 +214,6 @@ def main(page: ft.Page):
     record_file_path = "droid_rec.wav"
     audio_recorder = ftar.AudioRecorder(
         audio_encoder=ftar.AudioEncoder.WAV,
-        audio_encoder=ft.AudioEncoder.WAV,
         channels_num=1,
         sample_rate=16000
     )
