@@ -1,6 +1,12 @@
 [project]
 name = "droid"
 version = "1.0.0"
+dependencies = [
+    "flet==0.25.2",
+    "gTTS",
+    "flet-audio==0.1.0",
+    "flet-audio-recorder==0.1.0"
+]
 
 [tool.flet.android.permission]
 "android.permission.RECORD_AUDIO" = true
