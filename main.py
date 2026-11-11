@@ -6,8 +6,6 @@ import threading
 import json
 import urllib.request
 import flet as ft
-import flet_audio as fta
-import flet_audio_recorder as ftar
 from gtts import gTTS
 
 BAD_WORDS = ["дурак", "плохой", "ломать", "тупой"]
@@ -113,7 +111,7 @@ def main(page: ft.Page):
     droid_color = "#00FF66"
     global_running = True
 
-    audio_player = fta.Audio(src="about:blank", autoplay=False)
+    audio_player = ft.Audio(src="about:blank", autoplay=False)
     page.overlay.append(audio_player)
 
     def say_free(text: str):
@@ -213,8 +211,8 @@ def main(page: ft.Page):
             pass
 
     record_file_path = "droid_rec.wav"
-    audio_recorder = ftar.AudioRecorder(
-        audio_encoder=ftar.AudioEncoder.WAV,
+    audio_recorder = ft.AudioRecorder(
+        audio_encoder=ft.AudioEncoder.WAV,
         channels_num=1,
         sample_rate=16000
     )
