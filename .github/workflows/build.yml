@@ -35,6 +35,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y zip libgtk-3-dev
 
+      - name: Accept Android Licenses
+        run: |
+          yes | flutter doctor --android-licenses || true
+
       - name: Install Python dependencies globally
         run: |
           python -m pip install --upgrade pip
