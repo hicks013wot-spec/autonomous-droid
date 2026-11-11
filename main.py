@@ -1,53 +1,143 @@
-name: Build Droid APK
+import random
+import time
+import os
+import uuid
+import threading
+import json
+import httpx
+import flet as ft
+from gtts import gTTS
 
-on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
+BAD_WORDS = ["дурак", "плохой", "ломать", "тупой"]
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
+DROID_BRAIN = {
+    "morning": {
+        "triggers": ["привет", "здравствуй", "утро", "день", "вечер", "салют"],
+        "responses": [
+            "Привет, юный исследователь! Батарейки зарядил? Сегодня ждёт много интересного!",
+            "О, знакомые лица! Привет! Заходи быстрее, игрушки уже заждались.",
+            "Салют! Сканер показывает, что настроение отличное. Хорошего дня в группе!",
+            "Доброе утро! Пост охраны и робототехники желает вам продуктивного дня.",
+            "Здравствуйте! Приём детей идёт по расписанию, хорошего вам дня."
+        ],
+        "emotion": "happy"
+    },
+    "goodbye": {
+        "triggers": ["пока", "свидания", "домой", "встречи", "выходных", "всего доброго"],
+        "responses": [
+            "До завтра! Не забудь дома подзарядиться вкусным ужином!",
+            "Пока-пока! Завтра жду снова на базе, будем покорять новые вершины.",
+            "До свидания! Отличного вечера, отдохните как следует."
+        ],
+        "emotion": "sad"
+    },
+    "who_are_you": {
+        "triggers": ["кто ты", "как зовут", "имя", "что это"],
+        "responses": [
+            "Я Дроид — специальный кибер-помощник охраны. Слежу за порядком и поднимаю настроение.",
+            "Меня зовут Дроид. Я сделан из кода, проводов и отличного настроения."
+        ],
+        "emotion": "surprised"
+    },
+    "what_can_you_do": {
+        "triggers": ["умеешь", "зачем ты", "делаешь", "функции"],
+        "responses": [
+            "Умею здороваться, следить за порядком и проверять, все ли улыбаются. А ещё я отлично умею экономить заряд батареи!",
+            "Моя главная задача — помогать Паше на посту и встречать самых крутых ребят этого садика."
+        ],
+        "emotion": "happy"
+    },
+    "are_you_alive": {
+        "triggers": ["живой", "настоящий", "робот", "человек"],
+        "responses": [
+            "Наполовину! У меня нет сердца, зато есть процессор и зелёные глаза, которые рады тебя видеть.",
+            "Я самый настоящий цифровой друг. Почти как живой, только кашу по утрам не ем."
+        ],
+        "emotion": "surprised"
+    },
+    "age": {
+        "triggers": ["сколько лет", "возраст", "когда родился"],
+        "responses": [
+            "По человеческим меркам я совсем малыш, родился в 2026 году. Но соображаю очень быстро!"
+        ],
+        "emotion": "happy"
+    },
+    "praise": {
+        "triggers": ["крутой", "хороший", "смешной", "молодец", "классный"],
+        "responses": [
+            "Спасибо! Мои микросхемы прямо засветились от радости.",
+            "Приятно слышать! Записываю тебя в список лучших друзей дроида."
+        ],
+        "emotion": "happy"
+    }
+}
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+global_running = True
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+def recognize_audio_file(file_path: str) -> str:
+    stt_url = "http" + "://://google.com"
+    try:
+        if not os.path.exists(file_path):
+            return ""
+        with open(file_path, "rb") as f:
+            audio_data = f.read()
+        if len(audio_data) < 2000:
+            return ""
+        with httpx.Client(timeout=10.0) as client:
+            res = client.post(stt_url, headers={"Content-Type": "audio/l16; rate=16000; channels=1"}, content=audio_data)
+            for line in res.text.strip().split("\n"):
+                if "transcript" in line:
+                    data = json.loads(line)
+                    alts = data.get("result", [{}]).get("alternative", [])
+                    if alts:
+                        return alts[0].get("transcript", "").lower().strip()
+    except Exception:
+        pass
+    return ""
 
-      - name: Set up Java SDK
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '17'
+def main(page: ft.Page):
+    global global_running
+    page.title = "Дроид"
+    page.theme_mode = ft.ThemeMode.DARK
+    page.bgcolor = "#000000"
+    page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
+    page.vertical_alignment = ft.MainAxisAlignment.CENTER
+    page.is_busy = False
+    droid_color = "#00FF66"
+    global_running = True
 
-      - name: Set up Flutter SDK
-        uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
+    audio_player = ft.Audio(src="about:blank", autoplay=False)
+    page.overlay.append(audio_player)
 
-      - name: Install System dependencies (Zip)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y zip
+    def say_free(text: str):
+        if not global_running or not text:
+            return
+        try:
+            tts_file = f"voice_{uuid.uuid4().hex}.mp3"
+            tts = gTTS(text=text, lang="ru")
+            tts.save(tts_file)
+            audio_player.src = tts_file
+            audio_player.autoplay = True
+            audio_player.update()
+        except Exception as e:
+            print(f"[Ошибка голоса]: {e}")
 
-      - name: Install Python dependencies globally
-        run: |
-          python -m pip install --upgrade pip
-          pip install flet gTTS flet-audio flet-audio-recorder --break-system-packages
+    def on_close_app(e):
+        global global_running
+        global_running = False
+        os._exit(0)
+    page.on_close = on_close_app
 
-      - name: Build APK via Flet
-        run: |
-          flet build apk .
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Droid-App-APK
-          path: build/apk/*.apk
+    left_eye_box = ft.Container(width=90, height=110, bgcolor=droid_color, border_radius=20)
+    right_eye_box = ft.Container(width=90, height=110, bgcolor=droid_color, border_radius=20)
+    left_eye = ft.Container(content=left_eye_box, width=110, height=120, alignment=ft.alignment.center)
+    right_eye = ft.Container(content=right_eye_box, width=110, height=120, alignment=ft.alignment.center)
+    mouth = ft.Container(
+        width=220, height=35, bgcolor=droid_color,
+        border_radius=ft.border_radius.only(top_left=10, top_right=10, bottom_left=25, bottom_right=25),
+        margin=ft.margin.only(top=40, bottom=40)
+    )
+    status_text = ft.Text(value="Режим: Автономный", color=droid_color, size=18, text_align=ft.TextAlign.CENTER, width=350)
     def set_emotion(emotion_type):
         if not global_running:
             return
@@ -116,8 +206,8 @@ jobs:
             pass
 
     record_file_path = "droid_rec.wav"
-    audio_recorder = ftar.AudioRecorder(
-        audio_encoder=ftar.AudioEncoder.WAV,
+    audio_recorder = ft.AudioRecorder(
+        audio_encoder=ft.AudioEncoder.WAV,
         channels_num=1,
         sample_rate=16000
     )
@@ -205,7 +295,7 @@ jobs:
             return
         if not page.is_busy and left_eye_box.height == 110:
             try:
-                action = random.choice()
+                action = random.choice([0, 1, 2])
                 if action == 0:
                     for h in range(110, 9, -25):
                         if not global_running:
@@ -215,7 +305,7 @@ jobs:
                         page.update()
                         time.sleep(0.01)
                     time.sleep(0.12)
-                    new_radius = random.choice()
+                    new_radius = random.choice([20, 35, 10])
                     left_eye_box.border_radius = new_radius
                     right_eye_box.border_radius = new_radius
                     for h in range(10, 111, 25):
@@ -295,4 +385,3 @@ jobs:
     threading.Thread(target=auto_listen_loop, daemon=True).start()
 
 ft.app(target=main)
-
