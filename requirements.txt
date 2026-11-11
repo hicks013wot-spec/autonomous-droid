@@ -1,3 +1,4 @@
 flet==0.25.2
 gTTS
+flet-audio==0.1.0
 flet-audio-recorder==0.1.0
