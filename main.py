@@ -6,6 +6,7 @@ import threading
 import json
 import urllib.request
 import flet as ft
+import flet_audio as fta
 import flet_audio_recorder as ftar
 from gtts import gTTS
 
@@ -112,7 +113,7 @@ def main(page: ft.Page):
     droid_color = "#00FF66"
     global_running = True
 
-    audio_player = ft.Audio(src="about:blank", autoplay=False)
+    audio_player = fta.Audio(src="about:blank", autoplay=False)
     page.overlay.append(audio_player)
 
     def say_free(text: str):
