@@ -294,4 +294,5 @@ jobs:
     threading.Timer(2.0, blink_timer_func).start()
     threading.Thread(target=auto_listen_loop, daemon=True).start()
 
-ft.run(main)
+ft.app(target=main)
+
