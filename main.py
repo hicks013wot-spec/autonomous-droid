@@ -5,7 +5,7 @@ import uuid
 import threading
 import json
 import urllib.request
-import flet as ft
+import flet_audio_recorder as ftar
 from gtts import gTTS
 
 BAD_WORDS = ["дурак", "плохой", "ломать", "тупой"]
@@ -211,7 +211,8 @@ def main(page: ft.Page):
             pass
 
     record_file_path = "droid_rec.wav"
-    audio_recorder = ft.AudioRecorder(
+    audio_recorder = ftar.AudioRecorder(
+        audio_encoder=ftar.AudioEncoder.WAV,
         audio_encoder=ft.AudioEncoder.WAV,
         channels_num=1,
         sample_rate=16000
@@ -300,7 +301,7 @@ def main(page: ft.Page):
             return
         if not page.is_busy and left_eye_box.height == 110:
             try:
-                action = random.choice()
+                action = random.choice(tuple((0, 1, 2)))
                 if action == 0:
                     for h in range(110, 9, -25):
                         if not global_running:
@@ -310,7 +311,7 @@ def main(page: ft.Page):
                         page.update()
                         time.sleep(0.01)
                     time.sleep(0.12)
-                    new_radius = random.choice()
+                    new_radius = random.choice(tuple((20, 45, 5)))
                     left_eye_box.border_radius = new_radius
                     right_eye_box.border_radius = new_radius
                     for h in range(10, 111, 25):
