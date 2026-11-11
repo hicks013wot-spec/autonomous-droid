@@ -4,10 +4,9 @@ import os
 import uuid
 import threading
 import json
-import wave
 import urllib.request
 import flet as ft
-import sounddevice as sd
+import flet_audio_recorder as ftar
 from gtts import gTTS
 
 BAD_WORDS = ["дурак", "плохой", "ломать", "тупой"]
@@ -76,18 +75,18 @@ DROID_BRAIN = {
 
 global_running = True
 
-def record_and_recognize(duration: float = 3.5) -> str:
+def recognize_audio_file(file_path: str) -> str:
     stt_url = "http" + "://://google.com"
     try:
-        fs = 16000
-        recording = sd.rec(int(duration * fs), samplerate=fs, channels=1, dtype="int16")
-        sd.wait()
-        raw_bytes = recording.tobytes()
-        if len(raw_bytes) < 2000:
+        if not os.path.exists(file_path):
+            return ""
+        with open(file_path, "rb") as f:
+            audio_data = f.read()
+        if len(audio_data) < 2000:
             return ""
         req = urllib.request.Request(
             stt_url,
-            data=raw_bytes,
+            data=audio_data,
             headers={"Content-Type": "audio/l16; rate=16000; channels=1"}
         )
         with urllib.request.urlopen(req, timeout=10.0) as res:
@@ -211,6 +210,14 @@ def main(page: ft.Page):
                 page.update()
         except Exception:
             pass
+
+    record_file_path = "droid_rec.wav"
+    audio_recorder = ftar.AudioRecorder(
+        audio_encoder=ftar.AudioEncoder.WAV,
+        channels_num=1,
+        sample_rate=16000
+    )
+    page.overlay.append(audio_recorder)
 
     def process_recorded_voice(user_text: str):
         try:
@@ -362,11 +369,14 @@ def main(page: ft.Page):
                     status_text.value = "Zzz..."
                     page.update()
 
-                user_text = record_and_recognize(3.5)
+                audio_recorder.start_recording(record_file_path)
+                time.sleep(3.5)
+                audio_recorder.stop_recording()
 
                 if status_text.value == "Zzz... Дроид спит":
                     continue
 
+                user_text = recognize_audio_file(record_file_path)
                 if user_text:
                     left_eye_box.height = 110
                     right_eye_box.height = 110
